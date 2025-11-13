@@ -100,7 +100,8 @@ def processFiles(fileList, outputFolder, targetPxSize, channelMapping):
             print('\t\tResizing image from ['  + str(oldDimensions.X) +', '+ str(oldDimensions.Y) +', '+ str(oldDimensions.Z) +'] to ['+ str(newDimensions.X) +' '+ str(newDimensions.Y) +' '+ str(newDimensions.Z) +']')
 
             #img.save(os.path.join(INPUT_FOLDER, 'test.tiff'))
-            outputname = basename.split('_63x')[0] + '_ch' + str(idx+1) + '_downs'
+            basename_output = basename.split('-Airyscan')[0]
+            outputname = basename_output.split('_63x')[0] + '_ch' + str(idx+1) + '_downs'
             print('\t\tSaving resized file as ' + os.path.join(outputFolder,'ch'+str(idx+1), outputname + '.tiff'))
             OmeTiffWriter.save(resizedData, os.path.join(outputFolder,'ch'+str(idx+1), outputname + '.tiff'), image_name = outputname, channel_colors=[channels[chID]['color']], 
                             channel_names =channels[chID]['name'], dim_order="ZYX",physical_pixel_sizes=pxreSize)
@@ -208,7 +209,7 @@ def processVASA(dataset_path, output_path, model_path, model_name, VASAdiameter 
     Det_threshold = 0
     Flow_threshold=0.4
     Cellprob_threshold=0 
-    Batch_size = 1024
+    Batch_size = 512
     Do_3D=False 
     Anisotropy = 0 
     Stitch_threshold=0.3
@@ -266,10 +267,6 @@ def processVASA(dataset_path, output_path, model_path, model_name, VASAdiameter 
         # Create a new directory because it does not exist
         os.makedirs(VASA_output_path)
     
-
-
-
-
     #shutil.rmtree(output_path)
 
 
@@ -304,6 +301,111 @@ def processVASA(dataset_path, output_path, model_path, model_name, VASAdiameter 
         cp_io.save_masks(stack, masks, flows, str(short_name[0]), png=False, tif=True, channels=Channels)
         
     return VASA_output_path    
+
+def processVASA_cp4(dataset_path, output_path, model_path, model_name):
+    Channels = [0, 0] 
+    #diameter = VASAdiameter
+    Det_threshold = 0
+    Flow_threshold=0.4
+    Cellprob_threshold=0 
+    Batch_size = 32
+    Do_3D=True
+    Flow3D_smooth= 2
+    Z_axis = 0 
+    Anisotropy = 1.78 
+    Stitch_threshold=0.3
+    Min_size=15
+
+    images_path = os.path.join(dataset_path,'ch1')
+    VASA_output_path = os.path.join(output_path, 'VASA_ch1')
+
+
+    #model_path = 'D:/Projects/Mikala/images/training_bright/single_channel/ch1/xy_seg_model/models/models'
+    #model_name = 'VASA_xy_pipeline_bright_Mikala'
+
+    normalize_custom = {
+        "lowhigh": None ,
+        "percentile": [1.0,99.0],
+        "normalize": True,
+        "norm3D": True,
+        "sharpen_radius": 0,
+        "smooth_radius": 0,
+        "tile_norm_blocksize": 0,
+        "tile_norm_smooth3D": 1,
+        "invert": False
+    }
+
+
+    print('Processing VASA channel:')
+
+    # model_type='cyto' or model_type='nuclei'
+    fullpath_model = os.path.join(model_path,model_name)
+    print('Cellpose model path = ' + fullpath_model)
+
+    model = models.CellposeModel(gpu=True, pretrained_model=fullpath_model)
+
+    #model = models.CellposeModel(pretrained_model=os.path.join(model_path,modelName), gpu = True, diam_mean=diameter)
+
+    #isExist = os.path.exists(VASA_output_path)
+    if not os.path.exists(VASA_output_path):
+        # Create a new directory because it does not exist
+        os.makedirs(VASA_output_path)
+
+
+    target_files = []
+    # Iterate directory
+    for file in os.listdir(images_path):
+        # check only text files
+        if file.endswith('downs.tiff'):
+            target_files.append(file)
+
+    if not os.path.isdir(VASA_output_path):
+        # Create a new directory because it does not exist
+        os.makedirs(VASA_output_path)
+
+    VASA_output_path = os.path.join(VASA_output_path, target_files[0].split('_')[0])
+    if not os.path.isdir(VASA_output_path):
+        # Create a new directory because it does not exist
+        os.makedirs(VASA_output_path)
+    
+    #shutil.rmtree(output_path)
+
+
+    for f in target_files:
+        shutil.copy(os.path.join(images_path,f), os.path.join(VASA_output_path,f))
+
+    # channel to segment and nuclear channel 
+    # numbering starts at 1 
+    # for your single channel image use [0, 0] 
+    # for the multi channel image it's [3, 0]
+
+
+
+    for idx, image in enumerate(target_files):
+        print('Processing file ' + str(idx+1) + ' of ' + str(len(target_files)))
+        imPath = os.path.join(VASA_output_path,image)
+        print("Performing prediction on: "+ imPath)   
+        
+        stack = io.imread(imPath)
+        short_name = os.path.splitext(image)
+        n_plane = stack.shape[0]     
+    
+        masks, flows, styles = model.eval(stack, batch_size = Batch_size, 
+                                          normalize = normalize_custom, stitch_threshold=Stitch_threshold, 
+                                          do_3D=Do_3D, anisotropy = Anisotropy, min_size=Min_size, flow3D_smooth = Flow3D_smooth, 
+                                          cellprob_threshold=Cellprob_threshold ,z_axis = Z_axis)
+        
+        
+        prediction_stack_32 = img_as_float32(masks, force_copy=False)
+
+        print('Saving output files to directory:' + VASA_output_path)
+        os.chdir(VASA_output_path)
+    
+        cp_io.masks_flows_to_seg(stack, masks, flows, str(short_name[0]), channels=Channels)
+        cp_io.save_masks(stack, masks, flows, str(short_name[0]), png=False, tif=True, channels=Channels)
+        
+    return VASA_output_path    
+
 
 def processSegmentationMasks(masksFolder, label):
 
@@ -345,4 +447,16 @@ def mergeSegmentationResults(TJstats, VASAstats):
     return exportStats
 
 def exportSegmentationResults(exportdata, outputpath, basename):
-           exportdata.to_csv(os.path.join(outputpath,basename + '_counts.csv'), index=False)   
+           exportdata.to_csv(os.path.join(outputpath,basename + '_counts.csv'), index=False) 
+
+def exportTJSegmentationResults(TJstats, outputpath,basename):  
+    TJstatsf = TJstats.rename(columns={"size": "TJ_counts"})
+    TJstatsf = TJstatsf.drop(columns='marker')
+
+    TJstatsf.to_csv(os.path.join(outputpath,basename + '_TJ_counts.csv'), index=False) 
+
+def exportVASASegmentationResults(TJstats, outputpath,basename):  
+    TJstatsf = TJstats.rename(columns={"size": "VASA_counts"})
+    TJstatsf = TJstatsf.drop(columns='marker')
+
+    TJstatsf.to_csv(os.path.join(outputpath,basename + '_VASA_counts.csv'), index=False)           
