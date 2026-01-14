@@ -7,11 +7,12 @@ import os
 import shutil
 from cellpose import core, utils, models, metrics, train, transforms
 from cellpose import io as cp_io
-from skimage import img_as_float32  
+from skimage import img_as_float32
+from skimage.segmentation import find_boundaries  
 import pandas as pd  
 from skimage import ( feature, io, measure,
                       morphology,  transform)
-
+import numpy as np
 
 
 channels = [{'name': 'DAPI', 'id':4, 'color' : [0,0,255]},
@@ -435,6 +436,156 @@ def processSegmentationMasks(masksFolder, label):
 
     return regionStats 
 
+
+
+def refine_outliers(metrics, masks):
+    Q1 = metrics['num_pixels'].quantile(0.25)
+    Q3 = metrics['num_pixels'].quantile(0.75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    
+    refined_metrics = metrics[(metrics['num_pixels'] >= lower_bound)]
+    cleared_labels = metrics[(metrics['num_pixels'] <lower_bound)]['label'].values
+    print(cleared_labels)
+    #refined_masks = masks[cleared_labels]
+    refined_masks = masks.copy()
+    refined_masks[np.isin(masks, cleared_labels)] = 0
+   
+    return refined_metrics, refined_masks
+
+def calculate_surface_area(masks, labels, px_size=(1,1,1)):
+    n = len(labels)
+    lab = masks.copy()
+    lab[find_boundaries(lab, mode='outer')] = 0
+    vts, fs, ns, cs = measure.marching_cubes(lab, level=0, spacing=px_size)
+
+    lst = [[] for i in range(n+1)]
+    for i in fs: lst[int(cs[i[0]])].append(i)
+    areas = [0 if len(i)==0 else measure.mesh_surface_area(vts, i) for i in lst]
+    areas = areas[1:]    
+
+    return areas
+
+
+
+def processVASASegmentationMasks(masksFolder, label,  px_size= [0.25, 0.14, 0.14]):
+
+    minSize = 100
+
+    masks = []
+    for file in os.listdir(masksFolder):
+        # check only text files
+        if file.endswith('masks.tif'):
+            masks.append(file)
+
+    segmentedRegions = pd.DataFrame()
+    for maskFile in masks:
+        labels = io.imread(os.path.join(masksFolder,maskFile))
+
+        metrics = pd.DataFrame(measure.regionprops_table(labels, properties = ['label','num_pixels','area'], spacing =px_size))
+
+        metrics['surface_area']= calculate_surface_area(labels, metrics['label'], px_size=px_size)
+        metrics=metrics.rename(columns={"area": "volume"})
+        metrics['dataset'] = maskFile.split('_ch')[0] 
+        metrics['date'] = maskFile.split('_')[0] 
+
+        refined_metrics, refined_masks = refine_outliers(metrics, labels)
+
+        segmentedRegions= pd.concat([segmentedRegions, refined_metrics],ignore_index=True)
+
+
+        io.imsave(os.path.join(masksFolder, maskFile.split('.tif')[0] + '_refined.tif'), refined_masks.astype('uint16'))
+
+        #props = pd.DataFrame(measure.regionprops_table(mask, properties =['label', 'num_pixels']))
+        #props['dataset'] = maskFile.split('_ch')[0] 
+        #props['date'] = maskFile.split('_')[0]   
+
+        #= pd.concat([segmentedRegions, props],ignore_index=True)
+
+    #segmentedRegions = segmentedRegions[segmentedRegions['num_pixels'] > minSize ]
+
+    regionStats = segmentedRegions.groupby(['dataset','date'],as_index=False, group_keys=False).size()
+    regionStats['marker']= label  
+
+    return regionStats, segmentedRegions 
+
+
+def find_outliers(metrics, masks):
+    metrics['outlier'] = False
+    Q1 = metrics['num_pixels'].quantile(0.25)
+    Q3 = metrics['num_pixels'].quantile(0.75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    
+
+    metrics.loc[(metrics['num_pixels'] < lower_bound), 'outlier'] = True
+    outlier_labels = metrics[metrics['outlier']==True]['label'].tolist()
+
+    return metrics, outlier_labels
+
+def calculate_surface_area(masks, labels, px_size=(1,1,1)):
+    n = len(labels)
+    lab = masks.copy()
+    lab[find_boundaries(lab, mode='outer')] = 0
+    vts, fs, ns, cs = measure.marching_cubes(lab, level=0, spacing=px_size)
+
+    lst = [[] for i in range(n+1)]
+    for i in fs: lst[int(cs[i[0]])].append(i)
+    areas = [0 if len(i)==0 else measure.mesh_surface_area(vts, i) for i in lst]
+    areas = areas[1:]    
+
+    return areas
+
+def refineVASASegmentationMasks(masksFolder, label,  px_size= [0.25, 0.14, 0.14]):
+
+    masks = []
+    for file in os.listdir(masksFolder):
+        # check only text files
+        if file.endswith('masks.tif'):
+            masks.append(file)
+
+
+    segmentedRegions = pd.DataFrame()
+    refined_metrics  = pd.DataFrame()
+    for maskFile in masks:
+        labeled_image = io.imread(os.path.join(masksFolder,maskFile))
+
+        metrics = pd.DataFrame(measure.regionprops_table(labeled_image, properties = ['label','num_pixels','area'], spacing =px_size))
+
+        metrics['surface_area']= calculate_surface_area(labeled_image, metrics['label'], px_size=px_size)
+        metrics=metrics.rename(columns={"area": "volume"})
+        metrics['dataset'] = maskFile.split('_ch')[0] 
+        metrics['date'] = maskFile.split('_')[0] 
+
+        refined_metrics, outlier_labels = find_outliers(metrics, labeled_image)
+        print(f'[processVASASegmentationMasks] Found {len(outlier_labels)} outliers in file: ', maskFile)
+        segmentedRegions= pd.concat([segmentedRegions, refined_metrics],ignore_index=True)
+
+        
+        refined_labeled_image = labeled_image.copy()
+        refined_labeled_image[np.isin(labeled_image, outlier_labels)] = 0
+        io.imsave(os.path.join(masksFolder, maskFile.split('.tif')[0] + '_refined.tif'), refined_labeled_image.astype('uint8'), plugin='tifffile', compression='lzw')
+
+        #props = pd.DataFrame(measure.regionprops_table(mask, properties =['label', 'num_pixels']))
+        #props['dataset'] = maskFile.split('_ch')[0] 
+        #props['date'] = maskFile.split('_')[0]   
+
+        #= pd.concat([segmentedRegions, props],ignore_index=True)
+    
+    regionStats = segmentedRegions.groupby(['dataset','date'],as_index=False, group_keys=False)['outlier'].count()
+    outliers = segmentedRegions.groupby(['dataset','date'],as_index=False, group_keys=False)['outlier'].sum()
+    regionStats['refined_counts'] = regionStats['outlier'] - outliers['outlier']
+    regionStats = regionStats.rename(columns={"outlier": "size"})
+
+    regionStats['marker']= label    
+
+    return regionStats, segmentedRegions 
+
+
+
+
 def mergeSegmentationResults(TJstats, VASAstats):  
     TJstatsf = TJstats.rename(columns={"size": "TJ_counts"})
     TJstatsf = TJstatsf.drop(columns='marker')
@@ -446,7 +597,7 @@ def mergeSegmentationResults(TJstats, VASAstats):
 
     return exportStats
 
-def exportSegmentationResults(exportdata, outputpath, basename):
+def exportSegmentationResults(  exportdata, outputpath, basename):
            exportdata.to_csv(os.path.join(outputpath,basename + '_counts.csv'), index=False) 
 
 def exportTJSegmentationResults(TJstats, outputpath,basename):  
@@ -455,8 +606,14 @@ def exportTJSegmentationResults(TJstats, outputpath,basename):
 
     TJstatsf.to_csv(os.path.join(outputpath,basename + '_TJ_counts.csv'), index=False) 
 
-def exportVASASegmentationResults(TJstats, outputpath,basename):  
-    TJstatsf = TJstats.rename(columns={"size": "VASA_counts"})
-    TJstatsf = TJstatsf.drop(columns='marker')
+def exportVASASegmentationResults(VASAstats, outputpath,basename):  
+    VASAstatsf = VASAstats.rename(columns={"size": "VASA_counts"})
+    if 'refined_counts' in VASAstatsf.columns:
+        VASAstatsf = VASAstatsf.rename(columns={"refined_counts": "VASA_refined_counts"})
 
-    TJstatsf.to_csv(os.path.join(outputpath,basename + '_VASA_counts.csv'), index=False)           
+    VASAstatsf = VASAstatsf.drop(columns='marker')
+
+    VASAstatsf.to_csv(os.path.join(outputpath,basename + '_VASA_counts.csv'), index=False)
+
+def exportVASASegmentationDetailedStats(VASAsegmentedStats, outputpath,basename):  
+    VASAsegmentedStats.to_csv(os.path.join(outputpath,basename + '_VASA_detailed_counts.csv'), index=False)
