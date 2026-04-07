@@ -566,7 +566,7 @@ def refineVASASegmentationMasks(masksFolder, label,  px_size= [0.25, 0.14, 0.14]
         
         refined_labeled_image = labeled_image.copy()
         refined_labeled_image[np.isin(labeled_image, outlier_labels)] = 0
-        io.imsave(os.path.join(masksFolder, maskFile.split('.tif')[0] + '_refined.tif'), refined_labeled_image.astype('uint8'), plugin='tifffile', compression='lzw')
+        io.imsave(os.path.join(masksFolder, maskFile.split('.tif')[0] + '_refined.tif'), refined_labeled_image.astype('uint16'), plugin='tifffile', compression='lzw')
 
         #props = pd.DataFrame(measure.regionprops_table(mask, properties =['label', 'num_pixels']))
         #props['dataset'] = maskFile.split('_ch')[0] 
@@ -598,7 +598,7 @@ def mergeSegmentationResults(TJstats, VASAstats):
     return exportStats
 
 def exportSegmentationResults(  exportdata, outputpath, basename):
-           exportdata.to_csv(os.path.join(outputpath,basename + '_counts.csv'), index=False) 
+    exportdata.to_csv(os.path.join(outputpath,basename + '_counts.csv'), index=False) 
 
 def exportTJSegmentationResults(TJstats, outputpath,basename):  
     TJstatsf = TJstats.rename(columns={"size": "TJ_counts"})
@@ -610,8 +610,8 @@ def exportVASASegmentationResults(VASAstats, outputpath,basename):
     VASAstatsf = VASAstats.rename(columns={"size": "VASA_counts"})
     if 'refined_counts' in VASAstatsf.columns:
         VASAstatsf = VASAstatsf.rename(columns={"refined_counts": "VASA_refined_counts"})
-
-    VASAstatsf = VASAstatsf.drop(columns='marker')
+    if 'marker' in VASAstatsf.columns:
+        VASAstatsf = VASAstatsf.drop(columns='marker')
 
     VASAstatsf.to_csv(os.path.join(outputpath,basename + '_VASA_counts.csv'), index=False)
 
