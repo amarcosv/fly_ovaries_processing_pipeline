@@ -311,7 +311,7 @@ def processVASA_cp4(dataset_path, output_path, model_path, model_name):
     Cellprob_threshold=0 
     Batch_size = 32
     Do_3D=True
-    Flow3D_smooth= 2
+    Flow3D_smooth= [4,2,2]
     Z_axis = 0 
     Anisotropy = 1.78 
     Stitch_threshold=0.3
@@ -615,5 +615,5 @@ def exportVASASegmentationResults(VASAstats, outputpath,basename):
 
     VASAstatsf.to_csv(os.path.join(outputpath,basename + '_VASA_counts.csv'), index=False)
 
-def exportVASASegmentationDetailedStats(VASAsegmentedStats, outputpath,basename):  
+def exportVASASegmentationDetailedStats(VASAsegmentedStats, outputpath,basename):
     VASAsegmentedStats.to_csv(os.path.join(outputpath,basename + '_VASA_detailed_counts.csv'), index=False)

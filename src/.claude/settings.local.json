@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/amarcosv/.claude/**)",
+      "mcp__claude_ai_PubMed__search_articles",
+      "mcp__claude_ai_PubMed__get_article_metadata",
+      "mcp__claude_ai_PubMed__get_full_text_article",
+      "mcp__claude_ai_PubMed__find_related_articles",
+      "mcp__claude_ai_PubMed__lookup_article_by_citation",
+      "mcp__claude_ai_PubMed__convert_article_ids",
+      "mcp__claude_ai_PubMed__get_copyright_status",
+      "Bash(python -c \"import fpdf2\")",
+      "Bash(python -c \"import fpdf\")",
+      "Bash(python -c \"import reportlab\")",
+      "Bash(python:*)",
+      "Bash(conda run:*)",
+      "Bash(python -c \":*)"
+    ]
+  }
+}
