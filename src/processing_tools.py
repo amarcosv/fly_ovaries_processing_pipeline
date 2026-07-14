@@ -1,11 +1,10 @@
-from aicsimageio import AICSImage
-from aicsimageprocessing import resize
-from aicsimageio.writers import OmeTiffWriter
-from aicsimageio.types import PhysicalPixelSizes
-from aicsimageio.dimensions import Dimensions
+from bioio import BioImage
+from bioio import PhysicalPixelSizes
+from bioio import Dimensions
+from bioio.writers import OmeTiffWriter
 import os
 import shutil
-from cellpose import core, utils, models, metrics, train, transforms
+from cellpose import core, models
 from cellpose import io as cp_io
 from skimage import img_as_float32
 from skimage.segmentation import find_boundaries  
@@ -75,7 +74,7 @@ def processFiles(fileList, outputFolder, targetPxSize, channelMapping):
         basename = os.path.basename(f)
 
         # Get an AICSImage object
-        img = AICSImage(czifile)  # selects the first scene found        
+        img = BioImage(czifile)  # selects the first scene found
 
         pxSize = img.physical_pixel_sizes   
 
@@ -93,7 +92,7 @@ def processFiles(fileList, outputFolder, targetPxSize, channelMapping):
             chID =int(ch)-1
 
             data = img.get_image_data("ZYX", C=chID)  # returns 4D CZYX numpy array
-            resizedData= resize(data,resizeFactor)
+            resizedData = transform.rescale(data, resizeFactor, order=1, anti_aliasing=False, channel_axis=None, preserve_range=True).astype(data.dtype)
             #d =  Dimensions("ZYX", resizedData.shape)
             newDimensions = Dimensions("ZYX", resizedData.shape)
             oldDimensions = Dimensions("ZYX", data.shape)
@@ -110,7 +109,7 @@ def processFiles(fileList, outputFolder, targetPxSize, channelMapping):
 
 def processTJ(dataset_path, output_path,  model_path, model_name, TJdiameter=19.59):
 
-    Batch_size = 512
+    Batch_size = 32
     Channels = [0, 0] 
     diameter = TJdiameter
     Det_threshold = 0
@@ -298,7 +297,7 @@ def processVASA(dataset_path, output_path, model_path, model_name, VASAdiameter 
         print('Saving output files to directory:' + VASA_output_path)
         os.chdir(VASA_output_path)
     
-        cp_io.masks_flows_to_seg(stack, masks, flows, str(short_name[0]), diams=diameter, channels=Channels)
+        #cp_io.masks_flows_to_seg(stack, masks, flows, str(short_name[0]), diams=diameter, channels=Channels)
         cp_io.save_masks(stack, masks, flows, str(short_name[0]), png=False, tif=True, channels=Channels)
         
     return VASA_output_path    
