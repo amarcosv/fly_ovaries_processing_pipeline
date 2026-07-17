@@ -1,0 +1,61 @@
+[workspace]
+name = "cellpose-mikala"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+# Shared interpreter for every environment below.
+[dependencies]
+python = "3.12.*"
+
+# ---------------------------------------------------------------------------
+# common: bioio / CZI reader stack + IO tooling, identical in both Windows
+# envs (cellpose3_mikala_bioio, cellpose4_mikala_bioio) -> shared as-is.
+# ---------------------------------------------------------------------------
+[feature.common.pypi-dependencies]
+bioio = "==3.4.0"
+bioio-base = "==3.4.0"
+bioio-czi = "==2.8.0"
+bioio-ome-tiff = "==1.4.0"
+aicspylibczi = "==3.3.1"
+pylibczirw = "==6.1.0"
+dask = "==2026.7.1"
+distributed = "==2026.7.1"
+scikit-image = "==0.26.0"
+opencv-python-headless = "==5.0.0.93"
+ipykernel = "==7.3.0"
+
+# ---------------------------------------------------------------------------
+# gpu: matches the cu126 PyTorch build already validated on Windows.
+# Compatible with the cluster's A6000/A4000 (sm_86), A100 (sm_80),
+# L40S (sm_89) and T4 (sm_75) nodes under a driver supporting CUDA 12.6+.
+# Verify with `nvidia-smi` on a GPU node before first install; if the
+# driver is older, drop to index "https://download.pytorch.org/whl/cu118".
+# ---------------------------------------------------------------------------
+[feature.gpu.pypi-dependencies]
+torch = { version = "==2.13.0+cu126", index = "https://download.pytorch.org/whl/cu126" }
+torchvision = { version = "==0.28.0+cu126", index = "https://download.pytorch.org/whl/cu126" }
+
+[feature.gpu.tasks]
+check-gpu = "python -c \"import torch,sys; ok=torch.cuda.is_available(); print('torch', torch.__version__, '| CUDA available:', ok, '| device:', torch.cuda.get_device_name(0) if ok else None); sys.exit(0 if ok else 1)\""
+
+# ---------------------------------------------------------------------------
+# cellpose3: numba-based dynamics (pre-SAM), pinned to the validated release.
+# ---------------------------------------------------------------------------
+[feature.cellpose3.pypi-dependencies]
+cellpose = "==3.1.1.2"
+
+[feature.cellpose3.tasks]
+check-cellpose = "python -c \"from cellpose import version, core; print('cellpose', version, '| GPU usable:', core.use_gpu())\""
+
+# ---------------------------------------------------------------------------
+# cellpose4: Cellpose-SAM, pinned to the validated release.
+# ---------------------------------------------------------------------------
+[feature.cellpose4.pypi-dependencies]
+cellpose = "==4.2.1.1"
+
+[feature.cellpose4.tasks]
+check-cellpose = "python -c \"from cellpose import version, core; print('cellpose', version, '| GPU usable:', core.use_gpu())\""
+
+[environments]
+cellpose3 = ["common", "gpu", "cellpose3"]
+cellpose4 = ["common", "gpu", "cellpose4"]

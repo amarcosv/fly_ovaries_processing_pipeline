@@ -9,8 +9,8 @@ from cellpose import io as cp_io
 from skimage import img_as_float32
 from skimage.segmentation import find_boundaries  
 import pandas as pd  
-from skimage import ( feature, io, measure,
-                      morphology,  transform)
+from skimage import ( io, measure,
+                      transform)
 import numpy as np
 
 
@@ -196,7 +196,7 @@ def processTJ(dataset_path, output_path,  model_path, model_name, TJdiameter=19.
         print('Saving output files to directory:' + TJ_output_path)
         os.chdir(TJ_output_path)
     
-        cp_io.masks_flows_to_seg(stack, masks, flows, str(short_name[0]), diams=diameter, channels=Channels)
+        #cp_io.masks_flows_to_seg(stack, masks, flows, str(short_name[0]), diams=diameter, channels=Channels)
         cp_io.save_masks(stack, masks, flows, str(short_name[0]), png=False, tif=True, channels=Channels)
 
     return TJ_output_path
@@ -401,16 +401,13 @@ def processVASA_cp4(dataset_path, output_path, model_path, model_name):
         print('Saving output files to directory:' + VASA_output_path)
         os.chdir(VASA_output_path)
     
-        cp_io.masks_flows_to_seg(stack, masks, flows, str(short_name[0]), channels=Channels)
+        #cp_io.masks_flows_to_seg(stack, masks, flows, str(short_name[0]), channels=Channels)
         cp_io.save_masks(stack, masks, flows, str(short_name[0]), png=False, tif=True, channels=Channels)
-        
-    return VASA_output_path    
+
+    return VASA_output_path
 
 
-def processSegmentationMasks(masksFolder, label):
-
-    minSize = 100
-   
+def processTJSegmentationMasks(masksFolder, label, px_size= [0.25, 0.14, 0.14]):
 
     masks = []
     for file in os.listdir(masksFolder):
@@ -418,22 +415,25 @@ def processSegmentationMasks(masksFolder, label):
         if file.endswith('masks.tif'):
             masks.append(file)
 
-
     segmentedRegions = pd.DataFrame()
     for maskFile in masks:
-        mask = io.imread(os.path.join(masksFolder,maskFile))
-        props = pd.DataFrame(measure.regionprops_table(mask, properties =['label', 'num_pixels']))
-        props['dataset'] = maskFile.split('_ch')[0] 
-        props['date'] = maskFile.split('_')[0]   
+        labeled_image = io.imread(os.path.join(masksFolder,maskFile))
 
-        segmentedRegions= pd.concat([segmentedRegions, props],ignore_index=True)
+        intensityFile = maskFile.replace('_cp_masks.tif', '.tiff')
+        intensity_image = io.imread(os.path.join(masksFolder,intensityFile))
 
-    segmentedRegions = segmentedRegions[segmentedRegions['num_pixels'] > minSize ]
+        metrics = pd.DataFrame(measure.regionprops_table(labeled_image, intensity_image=intensity_image, properties = ['label','num_pixels','area','mean_intensity'], spacing =px_size))
+
+        metrics=metrics.rename(columns={"area": "volume"})
+        metrics['dataset'] = maskFile.split('_ch')[0]
+        metrics['date'] = maskFile.split('_')[0]
+
+        segmentedRegions= pd.concat([segmentedRegions, metrics],ignore_index=True)
 
     regionStats = segmentedRegions.groupby(['dataset','date'],as_index=False, group_keys=False).size()
-    regionStats['marker']= label  
+    regionStats['marker']= label
 
-    return regionStats 
+    return regionStats, segmentedRegions
 
 
 
@@ -452,19 +452,6 @@ def refine_outliers(metrics, masks):
     refined_masks[np.isin(masks, cleared_labels)] = 0
    
     return refined_metrics, refined_masks
-
-def calculate_surface_area(masks, labels, px_size=(1,1,1)):
-    n = len(labels)
-    lab = masks.copy()
-    lab[find_boundaries(lab, mode='outer')] = 0
-    vts, fs, ns, cs = measure.marching_cubes(lab, level=0, spacing=px_size)
-
-    lst = [[] for i in range(n+1)]
-    for i in fs: lst[int(cs[i[0]])].append(i)
-    areas = [0 if len(i)==0 else measure.mesh_surface_area(vts, i) for i in lst]
-    areas = areas[1:]    
-
-    return areas
 
 
 
@@ -599,13 +586,16 @@ def mergeSegmentationResults(TJstats, VASAstats):
 def exportSegmentationResults(  exportdata, outputpath, basename):
     exportdata.to_csv(os.path.join(outputpath,basename + '_counts.csv'), index=False) 
 
-def exportTJSegmentationResults(TJstats, outputpath,basename):  
+def exportTJSegmentationCounts(TJstats, outputpath,basename):
     TJstatsf = TJstats.rename(columns={"size": "TJ_counts"})
     TJstatsf = TJstatsf.drop(columns='marker')
 
-    TJstatsf.to_csv(os.path.join(outputpath,basename + '_TJ_counts.csv'), index=False) 
+    TJstatsf.to_csv(os.path.join(outputpath,basename + '_TJ_counts.csv'), index=False)
 
-def exportVASASegmentationResults(VASAstats, outputpath,basename):  
+def exportTJSegmentationPercellMetrics(TJsegmentedRegions, outputpath,basename):
+    TJsegmentedRegions.to_csv(os.path.join(outputpath,basename + '_TJ_percell_metrics.csv'), index=False)
+
+def exportVASASegmentationCounts(VASAstats, outputpath,basename):
     VASAstatsf = VASAstats.rename(columns={"size": "VASA_counts"})
     if 'refined_counts' in VASAstatsf.columns:
         VASAstatsf = VASAstatsf.rename(columns={"refined_counts": "VASA_refined_counts"})
@@ -614,5 +604,5 @@ def exportVASASegmentationResults(VASAstats, outputpath,basename):
 
     VASAstatsf.to_csv(os.path.join(outputpath,basename + '_VASA_counts.csv'), index=False)
 
-def exportVASASegmentationDetailedStats(VASAsegmentedStats, outputpath,basename):  
-    VASAsegmentedStats.to_csv(os.path.join(outputpath,basename + '_VASA_detailed_counts.csv'), index=False)
+def exportVASASegmentationPercellMetrics(VASAsegmentedRegions, outputpath,basename):
+    VASAsegmentedRegions.to_csv(os.path.join(outputpath,basename + '_VASA_percell_metrics.csv'), index=False)

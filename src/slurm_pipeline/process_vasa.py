@@ -50,10 +50,10 @@ def main():
 
     print('Segmentation finished')
 
-    # pt.refineVASASegmentationMasks, pt.exportVASASegmentationDetailedStats, pt.exportVASASegmentationResults
+    # pt.refineVASASegmentationMasks, pt.exportVASASegmentationCounts, pt.exportVASASegmentationPercellMetrics
     vasa_stats, vasa_regions = pt.refineVASASegmentationMasks(vasa_output_folder, 'VASA')
-    pt.exportVASASegmentationDetailedStats(vasa_stats, args.output, basename)
-    pt.exportVASASegmentationResults(vasa_regions, args.output, basename)
+    pt.exportVASASegmentationCounts(vasa_stats, args.output, basename)
+    pt.exportVASASegmentationPercellMetrics(vasa_regions, args.output, basename)
 
     print('VASA pipeline complete')
 

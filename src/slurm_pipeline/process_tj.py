@@ -40,9 +40,10 @@ def main():
 
     print('Segmentation finished')
 
-    # pt.processSegmentationMasks, pt.exportTJSegmentationResults
-    tj_stats = pt.processSegmentationMasks(tj_output_folder, 'TJ')
-    pt.exportTJSegmentationResults(tj_stats, args.output, basename)
+    # pt.processTJSegmentationMasks, pt.exportTJSegmentationCounts, pt.exportTJSegmentationPercellMetrics
+    tj_stats, tj_regions = pt.processTJSegmentationMasks(tj_output_folder, 'TJ')
+    pt.exportTJSegmentationCounts(tj_stats, args.output, basename)
+    pt.exportTJSegmentationPercellMetrics(tj_regions, args.output, basename)
 
     print('TJ pipeline complete')
 
