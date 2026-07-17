@@ -15,15 +15,27 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 log() { printf '[%(%Y-%m-%d %H:%M:%S)T] %s\n' -1 "$*"; }
 
+# Binary + package cache go on a lab share (like Miniforge at
+# /lab/keck_scratch/miniforge3), not $HOME, so they don't eat home quota
+# and the download cache can be reused across lab members/projects.
+# Set PIXI_HOME beforehand to skip this prompt (e.g. for non-interactive runs).
+if [[ -z "${PIXI_HOME:-}" ]]; then
+  default_pixi_home="$HOME/.pixi"
+  read -rp "Path to install pixi (binary + cache) [default: $default_pixi_home]: " pixi_home_input
+  PIXI_HOME="${pixi_home_input:-$default_pixi_home}"
+fi
+export PIXI_HOME
+log "Using PIXI_HOME=$PIXI_HOME"
+
 # ---------------------------------------------------------------------------
 # 1. pixi
 # ---------------------------------------------------------------------------
-export PATH="$HOME/.pixi/bin:$PATH"
+export PATH="$PIXI_HOME/bin:$PATH"
 
 if command -v pixi >/dev/null 2>&1; then
   log "pixi already installed: $(pixi --version)"
 else
-  log "Installing pixi"
+  log "Installing pixi to $PIXI_HOME"
   curl -fsSL https://pixi.sh/install.sh | sh
 fi
 

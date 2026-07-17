@@ -552,7 +552,8 @@ def refineVASASegmentationMasks(masksFolder, label,  px_size= [0.25, 0.14, 0.14]
         
         refined_labeled_image = labeled_image.copy()
         refined_labeled_image[np.isin(labeled_image, outlier_labels)] = 0
-        io.imsave(os.path.join(masksFolder, maskFile.split('.tif')[0] + '_refined.tif'), refined_labeled_image.astype('uint16'), plugin='tifffile', compression='lzw')
+        i
+        o.imsave(os.path.join(masksFolder, maskFile.split('.tif')[0] + '_refined.tif'), refined_labeled_image.astype('uint16'), plugin='tifffile', compression='lzw')
 
         #props = pd.DataFrame(measure.regionprops_table(mask, properties =['label', 'num_pixels']))
         #props['dataset'] = maskFile.split('_ch')[0] 
