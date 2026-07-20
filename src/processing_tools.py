@@ -12,6 +12,7 @@ import pandas as pd
 from skimage import ( io, measure,
                       transform)
 import numpy as np
+import tifffile
 
 
 channels = [{'name': 'DAPI', 'id':4, 'color' : [0,0,255]},
@@ -552,8 +553,7 @@ def refineVASASegmentationMasks(masksFolder, label,  px_size= [0.25, 0.14, 0.14]
         
         refined_labeled_image = labeled_image.copy()
         refined_labeled_image[np.isin(labeled_image, outlier_labels)] = 0
-        i
-        o.imsave(os.path.join(masksFolder, maskFile.split('.tif')[0] + '_refined.tif'), refined_labeled_image.astype('uint16'), plugin='tifffile', compression='lzw')
+        tifffile.imwrite(os.path.join(masksFolder, maskFile.split('.tif')[0] + '_refined.tif'), refined_labeled_image.astype('uint16'), compression='lzw')
 
         #props = pd.DataFrame(measure.regionprops_table(mask, properties =['label', 'num_pixels']))
         #props['dataset'] = maskFile.split('_ch')[0] 
