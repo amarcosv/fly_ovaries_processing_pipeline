@@ -410,6 +410,8 @@ def processVASA_cp4(dataset_path, output_path, model_path, model_name):
 
 def processTJSegmentationMasks(masksFolder, label, px_size= [0.25, 0.14, 0.14]):
 
+    minSize = 100
+
     masks = []
     for file in os.listdir(masksFolder):
         # check only text files
@@ -430,6 +432,8 @@ def processTJSegmentationMasks(masksFolder, label, px_size= [0.25, 0.14, 0.14]):
         metrics['date'] = maskFile.split('_')[0]
 
         segmentedRegions= pd.concat([segmentedRegions, metrics],ignore_index=True)
+
+    segmentedRegions = segmentedRegions[segmentedRegions['num_pixels'] > minSize]
 
     regionStats = segmentedRegions.groupby(['dataset','date'],as_index=False, group_keys=False).size()
     regionStats['marker']= label
