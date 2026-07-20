@@ -48,6 +48,9 @@ pixi install -e cellpose3
 pixi run -e cellpose3 check-gpu
 pixi run -e cellpose3 check-cellpose
 
+log "Registering cellpose3 Jupyter kernel"
+pixi run -e cellpose3 python -m ipykernel install --user --name cellpose3-env --display-name "Mikala Cellpose3"
+
 log "Installing cellpose4 environment"
 pixi install -e cellpose4
 pixi run -e cellpose4 check-gpu
