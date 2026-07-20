@@ -1,0 +1,3 @@
+# Local pixi environment install (slow to (re)build — keep untracked and untouched)
+envs/.pixi/
+envs/pixi.lock
